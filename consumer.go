@@ -1,34 +1,46 @@
 package main
 
 import (
+	"fmt"
+	"os"
+
 	"github.com/streadway/amqp"
 )
 
 type Consumer struct {
-	conn    *amqp.Connection
-	channel *amqp.Channel
-	tag     string
-	done    chan error
+	ac           *amqp.Connection
+	uri          string
+	queueName    string
+	exchangeName string
+	done         chan error
 }
 
-func CreateConsumer(uri, exchange, exchangeType, queueName, key, ctag string) (c *Consumer, err error) {
+func getConsumer() (c *Consumer, err error) {
+	host := os.Getenv("AMQP_HOST")
+	user := os.Getenv("AMQP_USER")
+	pass := os.Getenv("AMQP_PASS")
+	port := os.Getenv("AMQP_PORT")
+	vhost := os.Getenv("AMQP_VHOST")
+
 	c = &Consumer{
-		conn:    nil,
-		channel: nil,
-		tag:     ctag,
-		done:    make(chan error),
+		uri:          fmt.Sprintf("amqp://%s:%s@%s:%s/%s", user, pass, host, port, vhost),
+		queueName:    os.Getenv("AMQP_QUEUE"),
+		exchangeName: os.Getenv("AMQP_EXCHANGE"),
+		done:         make(chan error),
 	}
-	c.conn, err = amqp.Dial(uri)
+	c.ac, err = amqp.Dial(c.uri)
 	if err != nil {
 		return
 	}
-	c.channel, err = c.conn.Channel()
+	ch, err := c.ac.Channel()
 	if err != nil {
 		return
 	}
-	err = c.channel.ExchangeDeclare(
-		exchange,
-		exchangeType,
+	defer func() { err = ch.Close() }()
+
+	err = ch.ExchangeDeclare(
+		c.exchangeName,
+		"direct",
 		true,
 		false,
 		false,
@@ -38,21 +50,12 @@ func CreateConsumer(uri, exchange, exchangeType, queueName, key, ctag string) (c
 	if err != nil {
 		return
 	}
-	queue, err := c.channel.QueueDeclare(
-		queueName,
+
+	_, err = ch.QueueDeclare(
+		c.queueName,
 		true,
 		false,
 		false,
-		false,
-		nil,
-	)
-	if err != nil {
-		return
-	}
-	err = c.channel.QueueBind(
-		queue.Name,
-		key,
-		exchange,
 		false,
 		nil,
 	)

@@ -1,7 +1,14 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"log"
+)
 
 func main() {
-	fmt.Println("consumer!")
+	c, err := getConsumer()
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(c.uri)
 }
