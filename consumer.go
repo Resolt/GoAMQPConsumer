@@ -45,6 +45,11 @@ func getConsumer() (c *consumer, err error) {
 		return
 	}
 
+	err = c.ch.Qos(10, 0, false)
+	if err != nil {
+		return
+	}
+
 	err = c.ch.ExchangeDeclare(
 		c.exchangeName,
 		"direct",
@@ -110,7 +115,6 @@ func handle(ctx context.Context, deliveries <-chan amqp.Delivery, done chan erro
 	for d := range deliveries {
 		select {
 		case <-ctx.Done():
-			wg.Wait()
 			break
 		default:
 			guard <- struct{}{}
@@ -130,6 +134,10 @@ func handle(ctx context.Context, deliveries <-chan amqp.Delivery, done chan erro
 
 func (c *consumer) shutdown() (err error) {
 	logInfo("shutting down")
+	err = c.ch.Cancel(c.tag, false)
+	if err != nil {
+		return
+	}
 	err = c.ch.Close()
 	if err != nil {
 		return
