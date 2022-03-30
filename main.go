@@ -1,14 +1,13 @@
 package main
 
-import (
-	"fmt"
-	"log"
-)
-
 func main() {
 	c, err := getConsumer()
 	if err != nil {
-		log.Fatal(err)
+		logFatal(err)
 	}
-	fmt.Println(c.uri)
+
+	err = c.run()
+	if err != nil {
+		logFatal(err)
+	}
 }
