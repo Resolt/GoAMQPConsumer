@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"runtime"
+	"strconv"
 	"sync"
 	"syscall"
 	"time"
@@ -20,6 +22,8 @@ type consumer struct {
 	exchangeName string
 	tag          string
 	done         chan error
+	deliveries   <-chan amqp.Delivery
+	ntasks       int
 }
 
 func getConsumer() (c *consumer, err error) {
@@ -45,7 +49,17 @@ func getConsumer() (c *consumer, err error) {
 		return
 	}
 
-	err = c.ch.Qos(10, 0, false)
+	ntasks, err := strconv.Atoi(os.Getenv("NTASKS"))
+	if err != nil {
+		return
+	}
+	if ntasks <= 0 {
+		c.ntasks = runtime.NumCPU()
+	} else {
+		c.ntasks = ntasks
+	}
+
+	err = c.ch.Qos(c.ntasks*2, 0, false)
 	if err != nil {
 		return
 	}
@@ -75,11 +89,7 @@ func getConsumer() (c *consumer, err error) {
 		return
 	}
 
-	return
-}
-
-func (c *consumer) run() (err error) {
-	deliveries, err := c.ch.Consume(
+	c.deliveries, err = c.ch.Consume(
 		c.queueName,
 		c.tag,
 		false,
@@ -88,11 +98,19 @@ func (c *consumer) run() (err error) {
 		false,
 		nil,
 	)
+	if err != nil {
+		return
+	}
+
+	return
+}
+
+func (c *consumer) run() (err error) {
 
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	go handle(ctx, deliveries, c.done, 2)
+	go handle(ctx, c.deliveries, c.done, int(c.ntasks))
 
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt, syscall.SIGTERM)
