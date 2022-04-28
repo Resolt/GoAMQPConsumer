@@ -138,9 +138,9 @@ func handle(ctx context.Context, deliveries <-chan amqp.Delivery, done chan erro
 			guard <- struct{}{}
 			wg.Add(1)
 			go func(d amqp.Delivery) {
-				time.Sleep(time.Second)
 				logInfo("Message Body:", string(d.Body))
 				d.Ack(false)
+				time.Sleep(time.Second)
 				wg.Done()
 				<-guard
 			}(d)

@@ -5,6 +5,9 @@ RUN apk add git
 RUN go build -o gac
 
 FROM alpine
+ARG USER=nonroot
+RUN adduser -D $USER
+USER $USER
 WORKDIR /app
-COPY --from=build /app/gac .
+COPY --from=build --chown=$USER:$USER /app/gac .
 CMD ["./gac"]
