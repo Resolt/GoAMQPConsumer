@@ -140,7 +140,8 @@ func (c *consumer) handle(ctx context.Context) {
 			guard <- struct{}{}
 			wg.Add(1)
 			go func(d amqp.Delivery) {
-				c.log.Info("Message Body:", string(d.Body))
+				// c.log.Info("Message Body: ", string(d.Body))
+				c.log.Info(d.Body)
 				d.Ack(false)
 				time.Sleep(time.Second)
 				wg.Done()
