@@ -1,13 +1,18 @@
 package main
 
+import "github.com/sirupsen/logrus"
+
 func main() {
+	log := logrus.StandardLogger()
+
 	c, err := getConsumer()
 	if err != nil {
-		logFatal(err)
+		log.Fatal(err)
 	}
+	c.log = log
 
 	err = c.run()
 	if err != nil {
-		logFatal(err)
+		c.log.Fatal(err)
 	}
 }

@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	"github.com/streadway/amqp"
 )
 
@@ -24,6 +25,7 @@ type consumer struct {
 	done         chan error
 	deliveries   <-chan amqp.Delivery
 	ntasks       int
+	log          *logrus.Logger
 }
 
 func getConsumer() (c *consumer, err error) {
@@ -110,14 +112,14 @@ func (c *consumer) run() (err error) {
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	go handle(ctx, c.deliveries, c.done, int(c.ntasks))
+	go c.handle(ctx)
 
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt, syscall.SIGTERM)
 
 	select {
 	case <-interrupt:
-		logInfo("sigterm received")
+		c.log.Info("sigterm received")
 		err = c.shutdown()
 		<-c.done
 	case <-c.done:
@@ -127,10 +129,10 @@ func (c *consumer) run() (err error) {
 	return
 }
 
-func handle(ctx context.Context, deliveries <-chan amqp.Delivery, done chan error, max_tasks int) {
+func (c *consumer) handle(ctx context.Context) {
 	wg := sync.WaitGroup{}
-	guard := make(chan struct{}, max_tasks)
-	for d := range deliveries {
+	guard := make(chan struct{}, int(c.ntasks))
+	for d := range c.deliveries {
 		select {
 		case <-ctx.Done():
 			break
@@ -138,7 +140,7 @@ func handle(ctx context.Context, deliveries <-chan amqp.Delivery, done chan erro
 			guard <- struct{}{}
 			wg.Add(1)
 			go func(d amqp.Delivery) {
-				logInfo("Message Body:", string(d.Body))
+				c.log.Info("Message Body:", string(d.Body))
 				d.Ack(false)
 				time.Sleep(time.Second)
 				wg.Done()
@@ -147,11 +149,11 @@ func handle(ctx context.Context, deliveries <-chan amqp.Delivery, done chan erro
 		}
 	}
 	wg.Wait()
-	done <- nil
+	c.done <- nil
 }
 
 func (c *consumer) shutdown() (err error) {
-	logInfo("shutting down")
+	c.log.Info("shutting down")
 	err = c.ch.Cancel(c.tag, false)
 	if err != nil {
 		return
